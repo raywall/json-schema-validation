@@ -1,28 +1,29 @@
 /*
-Package validator fornece funcionalidades de validação JSON Schema para requisições HTTP e dados JSON.
+Package valid provides JSON Schema validation functionality for HTTP requests and JSON data.
 
-Esta biblioteca oferece uma interface simples e flexível para validar dados JSON contra schemas JSON Schema Draft 7,
-com suporte especializado para aplicações web e APIs.
+This library offers a simple and flexible interface for validating JSON data against JSON Schema Draft 7 schemas,
+with specialized support for web applications and APIs.
 
-# Características Principais
+# Main Features
 
-- Validação de dados JSON contra JSON Schema Draft 7
-- Middleware HTTP para validação automática de requisições
-- Suporte a múltiplos validadores para diferentes endpoints
-- Mensagens de erro detalhadas e estruturadas
-- Integração fácil com aplicações Go existentes
-- Validação de arquivos, strings, bytes e interfaces
+- Validation of JSON data against JSON Schema Draft 7
+- HTTP middleware for automatic request validation
+- Support for multiple validators for different endpoints
+- Detailed and structured error messages
+- Easy integration with existing Go applications
+- Validation of files, strings, bytes, and interfaces
 
-# Uso Básico
+# Basic Usage
 
-Criar um validador a partir de um arquivo de schema:
+Create a validator from a schema file:
 
-	validator, err := validator.New("user-schema.json")
+validator, err := validator.New("user-schema.json")
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
-Criar um validador a partir de uma string JSON:
+Create a validator from a JSON string:
 
 	schemaJSON := `{
 		"type": "object",
@@ -33,27 +34,29 @@ Criar um validador a partir de uma string JSON:
 		"required": ["name", "email"]
 	}`
 
-	validator, err := validator.NewFromString(schemaJSON)
+validator, err := validator.NewFromString(schemaJSON)
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
-# Validação de Dados
+# Data Validation
 
-Validar uma string JSON:
+Validate a JSON string:
 
-	result, err := validator.ValidateString(`{"name": "João", "email": "joao@exemplo.com"}`)
+result, err := validator.ValidateString(`{"name": "João", "email": "joao@exemplo.com"}`)
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if !result.Valid {
 		for _, err := range result.Errors {
-			fmt.Printf("Campo: %s, Erro: %s\n", err.Field, err.Message)
+			fmt.Printf("Field: %s, Error: %s\n", err.Field, err.Message)
 		}
 	}
 
-Validar uma requisição HTTP:
+Validate an HTTP request:
 
 	func userHandler(w http.ResponseWriter, r *http.Request) {
 		result, err := validator.ValidateRequest(r)
@@ -66,27 +69,27 @@ Validar uma requisição HTTP:
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": "Dados inválidos",
+				"error": "Invalid data",
 				"details": result.Errors,
 			})
 			return
 		}
 
-		// Processar dados válidos...
+		// Process valid data...
 	}
 
-# Middleware HTTP
+#Middleware HTTP
 
-Usar como middleware para validação automática:
+Use as middleware for automatic validation:
 
-	http.HandleFunc("/users", validator.Middleware(userHandler))
+http.HandleFunc("/users", validator.Middleware(userHandler))
 
-Middleware com configurações personalizadas:
+Middleware with custom settings:
 
 	config := validator.MiddlewareConfig{
 		SkipMethods: []string{"GET", "DELETE"},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, result *validator.ValidationResult) {
-			// Handler personalizado de erro
+			// Custom error handler
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
@@ -95,84 +98,87 @@ Middleware com configurações personalizadas:
 		},
 	}
 
-	http.HandleFunc("/users", validator.MiddlewareWithConfig(config, userHandler))
+http.HandleFunc("/users", validator.MiddlewareWithConfig(config, userHandler))
 
-# Múltiplos Validadores
+# Multiple Validators
 
-Para aplicações com múltiplos endpoints e schemas diferentes:
+For applications with multiple endpoints and different schemas:
 
-	multiValidator := validator.NewMultiValidator()
+multiValidator := validator.NewMultiValidator()
 
-	// Adicionar validadores
-	err := multiValidator.AddFromFile("user", "schemas/user.json")
+// Add validators
+err := multiValidator.AddFromFile("user", "schemas/user.json")
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = multiValidator.AddFromString("product", productSchema)
+err = multiValidator.AddFromString("product", productSchema)
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Usar validadores específicos
-	userValidator, exists := multiValidator.Get("user")
+// Use specific validators
+userValidator, exists := multiValidator.Get("user")
+
 	if exists {
 		result, err := userValidator.ValidateString(jsonData)
 		// ...
 	}
 
-# Estruturas de Dados
+# Data Structures
 
-ValidationResult representa o resultado de uma validação:
+ValidationResult represents the result of a validation:
 
 	type ValidationResult struct {
-		Valid  bool              `json:"valid"`
+		Valid bool `json:"valid"`
 		Errors []ValidationError `json:"errors,omitempty"`
 	}
 
-ValidationError fornece detalhes sobre erros de validação:
+ValidationError provides details about validation errors:
 
 	type ValidationError struct {
-		Field       string      `json:"field"`        // Campo que falhou na validação
-		Message     string      `json:"message"`      // Mensagem de erro
-		Value       interface{} `json:"value,omitempty"` // Valor que causou o erro
-		Constraint  string      `json:"constraint,omitempty"` // Tipo de restrição violada
+		Field string `json:"field"` // Field that failed validation
+		Message string `json:"message"` // Error message
+		Value interface{} `json:"value,omitempty"` // Value that caused the error
+		Constraint string `json:"constraint,omitempty"` // Type of constraint violated
 	}
 
-# Tratamento de Erros
+# Error Handling
 
-A biblioteca diferencia entre erros de validação (dados inválidos) e erros operacionais:
+The library differentiates between validation errors (invalid data) and operational errors:
 
-- Erros operacionais (arquivo não encontrado, JSON malformado, etc.) são retornados como error
-- Dados inválidos resultam em ValidationResult.Valid = false com detalhes em ValidationResult.Errors
+- Operational errors (file not found, malformed JSON, etc.) are returned as error
+- Invalid data results in ValidationResult.Valid = false with details in ValidationResult.Errors
 
-# Compatibilidade
+# Compatibility
 
-Esta biblioteca é compatível com JSON Schema Draft 7 e suporta todas as suas funcionalidades:
+This library is compatible with JSON Schema Draft 7 and supports all its versions Features:
 
-- Validação de tipos básicos (string, number, integer, boolean, array, object, null)
-- Restrições numéricas (minimum, maximum, multipleOf, etc.)
-- Restrições de string (minLength, maxLength, pattern, format)
-- Restrições de array (minItems, maxItems, uniqueItems, items, etc.)
-- Restrições de objeto (properties, required, additionalProperties, etc.)
-- Validação condicional (if/then/else, allOf, anyOf, oneOf, not)
-- Referências ($ref)
-- Formatos customizados
+- Basic type validation (string, number, integer, boolean, array, object, null)
+- Numeric constraints (minimum, maximum, multipleOf, etc.)
+- String constraints (minLength, maxLength, pattern, format)
+- Array constraints (minItems, maxItems, uniqueItems, items, etc.)
+- Object constraints (properties, required, additionalProperties, etc.)
+- Conditional validation (if/then/else, allOf, anyOf, oneOf, not)
+- References ($ref)
+- Custom formats
 
-# Dependências
+# Dependencies
 
-Esta biblioteca utiliza github.com/xeipuuv/gojsonschema para a validação JSON Schema.
+This library uses github.com/xeipuuv/gojsonschema for JSON Schema validation.
 
-# Exemplos Completos
+# Complete Examples
 
-Ver os arquivos de teste (*_test.go) para exemplos completos de uso e casos de teste.
+See the test files (*_test.go) for complete usage examples and test cases.
 
-# Licença
+# License
 
-[Especificar licença aqui]
+[Specify license here]
 
-# Contribuição
+# Contribution
 
-[Especificar diretrizes de contribuição aqui]
+[Specify contribution guidelines here]
 */
 package valid

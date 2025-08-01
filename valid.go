@@ -12,7 +12,7 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 )
 
-// ValidationError representa um erro de validação detalhado
+// ValidationError represents a detailed validation error
 type ValidationError struct {
 	Field      string      `json:"field"`
 	Message    string      `json:"message"`
@@ -20,24 +20,24 @@ type ValidationError struct {
 	Constraint string      `json:"constraint,omitempty"`
 }
 
-// ValidationResult representa o resultado de uma validação
+// ValidationResult represents the result of a validation
 type ValidationResult struct {
 	Valid  bool              `json:"valid"`
 	Errors []ValidationError `json:"errors,omitempty"`
 }
 
-// ErrorResponse representa a resposta de erro HTTP padrão
+// ErrorResponse represents the standard http error response
 type ErrorResponse struct {
 	Error   string            `json:"error"`
 	Details []ValidationError `json:"details,omitempty"`
 }
 
-// Validator encapsula o validador de JSON Schema
+// Validator encapsulates the Json Schema validator
 type Validator struct {
 	schema gojsonschema.JSONLoader
 }
 
-// New cria um novo validador a partir de um arquivo de schema
+// New Creates a new validator from a Schema file
 func New(schemaPath string) (*Validator, error) {
 	schemaFile, err := os.Open(schemaPath)
 	if err != nil {
@@ -63,13 +63,13 @@ func New(schemaPath string) (*Validator, error) {
 	}, nil
 }
 
-// NewFromString cria um validador a partir de uma string JSON Schema
+// NewFromString Creates a validator from a string JSON Schema
 func NewFromString(schemaJSON string) (*Validator, error) {
 	if strings.TrimSpace(schemaJSON) == "" {
 		return nil, fmt.Errorf("schema não pode estar vazio")
 	}
 
-	// Valida se o schema é um JSON válido
+	// Validated if the Schema is a valid JSON
 	var schemaObj interface{}
 	if err := json.Unmarshal([]byte(schemaJSON), &schemaObj); err != nil {
 		return nil, fmt.Errorf("schema JSON inválido: %w", err)
@@ -82,13 +82,13 @@ func NewFromString(schemaJSON string) (*Validator, error) {
 	}, nil
 }
 
-// NewFromBytes cria um validador a partir de bytes de um JSON Schema
+// NewFromBytes Creates a validator from bytes of a JSON Schema
 func NewFromBytes(schemaBytes []byte) (*Validator, error) {
 	if len(schemaBytes) == 0 {
 		return nil, fmt.Errorf("schema bytes não podem estar vazios")
 	}
 
-	// Valida se o schema é um JSON válido
+	// Validated if the Schema is a valid JSON
 	var schemaObj interface{}
 	if err := json.Unmarshal(schemaBytes, &schemaObj); err != nil {
 		return nil, fmt.Errorf("schema bytes inválidos: %w", err)
@@ -101,7 +101,7 @@ func NewFromBytes(schemaBytes []byte) (*Validator, error) {
 	}, nil
 }
 
-// ValidateRequest valida uma requisição HTTP contra o schema
+// ValidateRequest validates an HTTP request against Schema
 func (v *Validator) ValidateRequest(r *http.Request) (*ValidationResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("requisição não pode ser nil")
@@ -116,19 +116,19 @@ func (v *Validator) ValidateRequest(r *http.Request) (*ValidationResult, error) 
 		return nil, fmt.Errorf("erro ao ler corpo da requisição: %w", err)
 	}
 
-	// Permite reutilizar o body da requisição
+	// Allows to reuse the requisition body
 	r.Body = io.NopCloser(strings.NewReader(string(body)))
 
 	return v.ValidateBytes(body)
 }
 
-// ValidateBytes valida bytes JSON contra o schema
+// ValidateBytes validates JSON bytes against schema
 func (v *Validator) ValidateBytes(jsonData []byte) (*ValidationResult, error) {
 	if len(jsonData) == 0 {
 		return nil, fmt.Errorf("dados JSON não podem estar vazios")
 	}
 
-	// Valida se é um JSON válido antes de validar o schema
+	// Validates if it is valid JSON before validating the schema
 	var jsonObj interface{}
 	if err := json.Unmarshal(jsonData, &jsonObj); err != nil {
 		return &ValidationResult{
@@ -153,12 +153,12 @@ func (v *Validator) ValidateBytes(jsonData []byte) (*ValidationResult, error) {
 	return v.buildValidationResult(result), nil
 }
 
-// ValidateString valida uma string JSON contra o schema
+// ValidateString validates a JSON string against the schema
 func (v *Validator) ValidateString(jsonString string) (*ValidationResult, error) {
 	return v.ValidateBytes([]byte(jsonString))
 }
 
-// ValidateInterface valida uma interface{} contra o schema
+// ValidateInterface validates an interface{} against the schema
 func (v *Validator) ValidateInterface(data interface{}) (*ValidationResult, error) {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
@@ -168,7 +168,7 @@ func (v *Validator) ValidateInterface(data interface{}) (*ValidationResult, erro
 	return v.ValidateBytes(jsonBytes)
 }
 
-// buildValidationResult constrói o resultado da validação a partir do resultado do gojsonschema
+// buildValidationResult builds the validation result from the gojsonschema result
 func (v *Validator) buildValidationResult(result *gojsonschema.Result) *ValidationResult {
 	validationResult := &ValidationResult{
 		Valid: result.Valid(),
@@ -196,33 +196,33 @@ func (v *Validator) buildValidationResult(result *gojsonschema.Result) *Validati
 	return validationResult
 }
 
-// Middleware retorna um middleware HTTP para validação automática
+// Middleware returns an HTTP middleware for automatic validation
 func (v *Validator) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return v.MiddlewareWithConfig(MiddlewareConfig{}, next)
 }
 
-// MiddlewareConfig configurações para o middleware
+// MiddlewareConfig settings for the middleware
 type MiddlewareConfig struct {
-	// SkipMethods métodos HTTP que devem pular a validação (padrão: GET, DELETE, HEAD)
+	// SkipMethods HTTP methods that should skip validation (default: GET, DELETE, HEAD)
 	SkipMethods []string
-	// ErrorHandler função personalizada para tratar erros de validação
+	// ErrorHandler custom function to handle validation errors
 	ErrorHandler func(w http.ResponseWriter, r *http.Request, result *ValidationResult)
 }
 
-// MiddlewareWithConfig retorna um middleware HTTP com configurações personalizadas
+// MiddlewareWithConfig returns an HTTP middleware with custom settings
 func (v *Validator) MiddlewareWithConfig(config MiddlewareConfig, next http.HandlerFunc) http.HandlerFunc {
-	// Métodos padrão que pulam validação
+	// Default methods that skip validation
 	if len(config.SkipMethods) == 0 {
 		config.SkipMethods = []string{"GET", "DELETE", "HEAD", "OPTIONS"}
 	}
 
-	// Handler de erro padrão
+	// Standard error handler
 	if config.ErrorHandler == nil {
 		config.ErrorHandler = v.defaultErrorHandler
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Verifica se deve pular a validação para este método
+		// Checks whether to skip validation for this method
 		for _, method := range config.SkipMethods {
 			if r.Method == method {
 				next(w, r)
@@ -246,7 +246,7 @@ func (v *Validator) MiddlewareWithConfig(config MiddlewareConfig, next http.Hand
 	}
 }
 
-// defaultErrorHandler é o handler de erro padrão para o middleware
+// defaultErrorHandler is the default error handler for the middleware
 func (v *Validator) defaultErrorHandler(w http.ResponseWriter, r *http.Request, result *ValidationResult) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
@@ -259,24 +259,24 @@ func (v *Validator) defaultErrorHandler(w http.ResponseWriter, r *http.Request, 
 	json.NewEncoder(w).Encode(response)
 }
 
-// MultiValidator gerencia múltiplos validadores
+// MultiValidator manages multiple validators
 type MultiValidator struct {
 	validators map[string]*Validator
 }
 
-// NewMultiValidator cria um novo gerenciador de múltiplos validadores
+// NewMultiValidator creates a new multiple validator manager
 func NewMultiValidator() *MultiValidator {
 	return &MultiValidator{
 		validators: make(map[string]*Validator),
 	}
 }
 
-// Add adiciona um validador com uma chave específica
+// Add adds a validator with a specific key
 func (mv *MultiValidator) Add(key string, validator *Validator) {
 	mv.validators[key] = validator
 }
 
-// AddFromFile adiciona um validador a partir de um arquivo
+// AddFromFile add a validator from a file
 func (mv *MultiValidator) AddFromFile(key, schemaPath string) error {
 	validator, err := New(schemaPath)
 	if err != nil {
@@ -286,7 +286,7 @@ func (mv *MultiValidator) AddFromFile(key, schemaPath string) error {
 	return nil
 }
 
-// AddFromString adiciona um validador a partir de uma string
+// AddFromString adds a validator from a string
 func (mv *MultiValidator) AddFromString(key, schemaJSON string) error {
 	validator, err := NewFromString(schemaJSON)
 	if err != nil {
@@ -296,18 +296,18 @@ func (mv *MultiValidator) AddFromString(key, schemaJSON string) error {
 	return nil
 }
 
-// Get retorna um validador pela chave
+// Get returns a validator by key
 func (mv *MultiValidator) Get(key string) (*Validator, bool) {
 	validator, exists := mv.validators[key]
 	return validator, exists
 }
 
-// Remove remove um validador
+// Remove removes a validator
 func (mv *MultiValidator) Remove(key string) {
 	delete(mv.validators, key)
 }
 
-// Keys retorna todas as chaves dos validadores
+// Keys returns all validator keys
 func (mv *MultiValidator) Keys() []string {
 	keys := make([]string, 0, len(mv.validators))
 	for key := range mv.validators {
@@ -316,7 +316,7 @@ func (mv *MultiValidator) Keys() []string {
 	return keys
 }
 
-// Count retorna o número de validadores registrados
+// Count returns the number of registered validators
 func (mv *MultiValidator) Count() int {
 	return len(mv.validators)
 }

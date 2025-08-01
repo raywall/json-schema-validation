@@ -138,14 +138,14 @@ func TestNewFromBytes(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-	// Cria arquivo temporário para teste
+	// Creates temporary file for testing
 	tmpFile, err := os.CreateTemp("", "test-schema-*.json")
 	if err != nil {
 		t.Fatalf("erro ao criar arquivo temporário: %v", err)
 	}
 	defer os.Remove(tmpFile.Name())
 
-	// Escreve schema no arquivo
+	// Writes a schema file
 	if _, err := tmpFile.WriteString(testSchema); err != nil {
 		t.Fatalf("erro ao escrever no arquivo temporário: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestNew(t *testing.T) {
 		t.Error("esperava validator válido")
 	}
 
-	// Teste com arquivo inexistente
+	// Nonexistent file test
 	_, err = New("arquivo-inexistente.json")
 	if err == nil {
 		t.Error("esperava erro para arquivo inexistente")
@@ -316,7 +316,7 @@ func TestValidateBytes(t *testing.T) {
 		t.Error("esperava dados válidos")
 	}
 
-	// Teste com bytes vazios
+	// Test with empty bytes
 	_, err = validator.ValidateBytes([]byte{})
 	if err == nil {
 		t.Error("esperava erro para bytes vazios")
@@ -343,9 +343,9 @@ func TestValidateInterface(t *testing.T) {
 		t.Errorf("esperava dados válidos, mas recebeu erros: %+v", result.Errors)
 	}
 
-	// Teste com dados inválidos
+	// Test with invalid data
 	invalidData := map[string]interface{}{
-		"name":  "T", // muito curto
+		"name":  "T", // very short
 		"email": "invalid-email",
 	}
 
@@ -367,7 +367,7 @@ func TestValidateRequest(t *testing.T) {
 		t.Fatalf("erro ao criar validator: %v", err)
 	}
 
-	// Teste com requisição válida
+	// Valid request test
 	validJSON := `{"name": "Test User", "email": "test@example.com"}`
 	req := httptest.NewRequest("POST", "/test", strings.NewReader(validJSON))
 	req.Header.Set("Content-Type", "application/json")
@@ -380,7 +380,7 @@ func TestValidateRequest(t *testing.T) {
 		t.Errorf("esperava dados válidos, mas recebeu erros: %+v", result.Errors)
 	}
 
-	// Verifica se o body pode ser lido novamente
+	// Check if body can be read again
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		t.Errorf("erro ao ler body novamente: %v", err)
@@ -389,13 +389,13 @@ func TestValidateRequest(t *testing.T) {
 		t.Error("body da requisição foi modificado")
 	}
 
-	// Teste com requisição nil
+	// Test with nil request
 	_, err = validator.ValidateRequest(nil)
 	if err == nil {
 		t.Error("esperava erro para requisição nil")
 	}
 
-	// Teste com body nil
+	// Test with nil body
 	reqNilBody := &http.Request{}
 	_, err = validator.ValidateRequest(reqNilBody)
 	if err == nil {
@@ -417,7 +417,7 @@ func TestMiddleware(t *testing.T) {
 
 	middleware := validator.Middleware(handler)
 
-	// Teste com GET (deve pular validação)
+	// Test with GET (must skip validation)
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 
@@ -431,7 +431,7 @@ func TestMiddleware(t *testing.T) {
 		t.Errorf("esperava status 200, recebeu %d", w.Code)
 	}
 
-	// Teste com POST válido
+	// Test with a valid POST
 	validJSON := `{"name": "Test User", "email": "test@example.com"}`
 	req = httptest.NewRequest("POST", "/test", strings.NewReader(validJSON))
 	w = httptest.NewRecorder()
@@ -446,8 +446,8 @@ func TestMiddleware(t *testing.T) {
 		t.Errorf("esperava status 200, recebeu %d", w.Code)
 	}
 
-	// Teste com POST inválido
-	invalidJSON := `{"name": "T"}` // nome muito curto, email ausente
+	// Test with an invalid POST
+	invalidJSON := `{"name": "T"}` // very short name, missing email
 	req = httptest.NewRequest("POST", "/test", strings.NewReader(invalidJSON))
 	w = httptest.NewRecorder()
 
@@ -461,7 +461,7 @@ func TestMiddleware(t *testing.T) {
 		t.Errorf("esperava status 400, recebeu %d", w.Code)
 	}
 
-	// Verifica se a resposta de erro está no formato correto
+	// Checks if the error response is in the correct format
 	var errorResponse ErrorResponse
 	err = json.NewDecoder(w.Body).Decode(&errorResponse)
 	if err != nil {
@@ -489,7 +489,7 @@ func TestMiddlewareWithConfig(t *testing.T) {
 
 	customErrorHandlerCalled := false
 	config := MiddlewareConfig{
-		SkipMethods: []string{"GET", "POST"}, // Pula também POST
+		SkipMethods: []string{"GET", "POST"}, // Also skip POST
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, result *ValidationResult) {
 			customErrorHandlerCalled = true
 			w.WriteHeader(http.StatusUnprocessableEntity)
@@ -502,7 +502,7 @@ func TestMiddlewareWithConfig(t *testing.T) {
 
 	middleware := validator.MiddlewareWithConfig(config, handler)
 
-	// Teste POST (deve ser pulado devido à configuração)
+	// POST test (must be skipped due to configuration)
 	req := httptest.NewRequest("POST", "/test", strings.NewReader(`{"invalid": "data"}`))
 	w := httptest.NewRecorder()
 
@@ -513,7 +513,7 @@ func TestMiddlewareWithConfig(t *testing.T) {
 		t.Error("handler deveria ter sido chamado para POST (método pulado)")
 	}
 
-	// Teste PUT (deve validar e usar error handler customizado)
+	// PUT test (must validate and use custom error handler)
 	req = httptest.NewRequest("PUT", "/test", strings.NewReader(`{"name": "T"}`))
 	w = httptest.NewRecorder()
 
@@ -539,7 +539,7 @@ func TestMultiValidator(t *testing.T) {
 		t.Error("MultiValidator deveria iniciar vazio")
 	}
 
-	// Teste AddFromString
+	// AddFromString test
 	err := mv.AddFromString("user", testSchema)
 	if err != nil {
 		t.Errorf("erro ao adicionar validator: %v", err)
@@ -549,7 +549,7 @@ func TestMultiValidator(t *testing.T) {
 		t.Error("MultiValidator deveria ter 1 validator após adicionar")
 	}
 
-	// Teste Get
+	// Get test
 	validator, exists := mv.Get("user")
 	if !exists {
 		t.Error("validator 'user' deveria existir")
@@ -558,13 +558,13 @@ func TestMultiValidator(t *testing.T) {
 		t.Error("validator não deveria ser nil")
 	}
 
-	// Teste com chave inexistente
+	// test with non-existent key
 	_, exists = mv.Get("inexistente")
 	if exists {
 		t.Error("validator inexistente não deveria existir")
 	}
 
-	// Teste Keys
+	// Keys test
 	keys := mv.Keys()
 	if len(keys) != 1 {
 		t.Errorf("esperava 1 chave, recebeu %d", len(keys))
@@ -573,7 +573,7 @@ func TestMultiValidator(t *testing.T) {
 		t.Errorf("esperava chave 'user', recebeu '%s'", keys[0])
 	}
 
-	// Adiciona outro validator
+	// Adds another validator
 	simpleSchema := `{"type": "string", "minLength": 1}`
 	err = mv.AddFromString("simple", simpleSchema)
 	if err != nil {
@@ -584,7 +584,7 @@ func TestMultiValidator(t *testing.T) {
 		t.Error("MultiValidator deveria ter 2 validators")
 	}
 
-	// Teste Remove
+	// Remove test
 	mv.Remove("user")
 	if mv.Count() != 1 {
 		t.Error("MultiValidator deveria ter 1 validator após remoção")
@@ -595,7 +595,7 @@ func TestMultiValidator(t *testing.T) {
 		t.Error("validator removido não deveria existir")
 	}
 
-	// Teste AddFromFile com arquivo inexistente
+	// Test AddFromFile with non-existent file
 	err = mv.AddFromFile("test", "arquivo-inexistente.json")
 	if err == nil {
 		t.Error("esperava erro para arquivo inexistente")
@@ -627,7 +627,7 @@ func TestValidationErrorStructure(t *testing.T) {
 		t.Error("esperava erros de validação")
 	}
 
-	// Verifica estrutura dos erros
+	// Check the structure of errors
 	for _, validationErr := range result.Errors {
 		if validationErr.Message == "" {
 			t.Error("erro deveria ter mensagem")
@@ -635,11 +635,11 @@ func TestValidationErrorStructure(t *testing.T) {
 		if validationErr.Constraint == "" {
 			t.Error("erro deveria ter constraint")
 		}
-		// Field pode estar vazio para erros globais
-		// Value pode ser nil para alguns tipos de erro
+		// Field may be empty for global errors
+		// Value may be nil for some error types
 	}
 
-	// Testa JSON malformado
+	// Tests malformed JSON
 	result, err = validator.ValidateString(`{"name": "test"`)
 	if err != nil {
 		t.Fatalf("erro inesperado: %v", err)
