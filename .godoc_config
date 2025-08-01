@@ -1,0 +1,20 @@
+{
+	"PkgHandler": {
+		"Pattern": "/json-schema-validation",
+		"StripPrefix": "/json-schema-validation",
+		"Include": [
+			"/src/github.com/raywall/json-schema-validation/*.go",
+		],
+		"Exclude": [
+			"/src/github.com/raywall/json-schema-validation/*_test.go",
+		],
+		"IgnoredSuffixes": [
+			"iface"
+		]
+	},
+	"Github": {
+		"Tag": "main",
+		"Repo": "/raywall/json-schema-validation",
+		"UseGithub": true
+	}
+}

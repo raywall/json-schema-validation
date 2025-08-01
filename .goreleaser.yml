@@ -1,0 +1,40 @@
+# .goreleaser.yml
+version: 2
+
+# Opcional: defina o nome do projeto se necessário
+project_name: json-schema-validation
+
+builds:
+- id: json-schema-validation
+  main: ./examples/validation.go
+  binary: json-schema-validation
+  env:
+  - CGO_ENABLED=0
+  goos:
+  - linux
+  - windows
+  - darwin
+  goarch:
+  - amd64
+  - arm64
+  - arm
+  skip: true
+
+release:
+  # Opcional: você pode remover a seção 'github' se o repositório 
+  # no qual você está executando a action for o 'raywall/json-schema-validation'.
+  # GoReleaser infere isso automaticamente.
+  name_template: "Release {{ .Tag }}"
+  github:
+    owner: raywall
+    name: json-schema-validation
+  make_latest: true
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
+    - 'Merge pull request'
+    - 'Merge branch'
