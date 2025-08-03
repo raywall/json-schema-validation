@@ -18,6 +18,7 @@ type ValidationError struct {
 	Message    string      `json:"message"`
 	Value      interface{} `json:"value,omitempty"`
 	Constraint string      `json:"constraint,omitempty"`
+	Context    string      `json:"context,omitempty"`
 }
 
 // ValidationResult represents the result of a validation
@@ -34,10 +35,11 @@ type ErrorResponse struct {
 
 // Validator encapsulates the Json Schema validator
 type Validator struct {
-	schema gojsonschema.JSONLoader
+	schema       gojsonschema.JSONLoader
+	customErrors map[string]map[string]string // Mapa de mensagens de erro personalizadas
 }
 
-// New Creates a new validator from a Schema file
+// New creates a new validator from a Schema file
 func New(schemaPath string) (*Validator, error) {
 	schemaFile, err := os.Open(schemaPath)
 	if err != nil {
@@ -50,55 +52,77 @@ func New(schemaPath string) (*Validator, error) {
 		return nil, fmt.Errorf("erro ao ler arquivo de schema '%s': %w", schemaPath, err)
 	}
 
-	// Valida se o schema é um JSON válido
-	var schemaObj interface{}
-	if err := json.Unmarshal(schemaBytes, &schemaObj); err != nil {
-		return nil, fmt.Errorf("schema inválido em '%s': %w", schemaPath, err)
-	}
-
-	schema := gojsonschema.NewBytesLoader(schemaBytes)
-
-	return &Validator{
-		schema: schema,
-	}, nil
+	return NewFromBytes(schemaBytes)
 }
 
-// NewFromString Creates a validator from a string JSON Schema
+// NewFromString creates a validator from a string JSON Schema
 func NewFromString(schemaJSON string) (*Validator, error) {
 	if strings.TrimSpace(schemaJSON) == "" {
 		return nil, fmt.Errorf("schema não pode estar vazio")
 	}
-
-	// Validated if the Schema is a valid JSON
-	var schemaObj interface{}
-	if err := json.Unmarshal([]byte(schemaJSON), &schemaObj); err != nil {
-		return nil, fmt.Errorf("schema JSON inválido: %w", err)
-	}
-
-	schema := gojsonschema.NewStringLoader(schemaJSON)
-
-	return &Validator{
-		schema: schema,
-	}, nil
+	return NewFromBytes([]byte(schemaJSON))
 }
 
-// NewFromBytes Creates a validator from bytes of a JSON Schema
+// NewFromBytes creates a validator from bytes of a JSON Schema
 func NewFromBytes(schemaBytes []byte) (*Validator, error) {
 	if len(schemaBytes) == 0 {
 		return nil, fmt.Errorf("schema bytes não podem estar vazios")
 	}
 
-	// Validated if the Schema is a valid JSON
-	var schemaObj interface{}
+	// Parse the schema to extract custom error messages
+	var schemaObj map[string]interface{}
 	if err := json.Unmarshal(schemaBytes, &schemaObj); err != nil {
-		return nil, fmt.Errorf("schema bytes inválidos: %w", err)
+		return nil, fmt.Errorf("schema JSON inválido: %w", err)
 	}
+
+	// Extract custom error messages from schema
+	customErrors := extractErrorMessages(schemaObj)
 
 	schema := gojsonschema.NewBytesLoader(schemaBytes)
 
 	return &Validator{
-		schema: schema,
+		schema:       schema,
+		customErrors: customErrors,
 	}, nil
+}
+
+// extractErrorMessages extracts custom error messages from schema
+func extractErrorMessages(schema map[string]interface{}) map[string]map[string]string {
+	errorMessages := make(map[string]map[string]string)
+
+	if items, ok := schema["items"].(map[string]interface{}); ok {
+		if props, ok := items["properties"].(map[string]interface{}); ok {
+			for field, prop := range props {
+				if propMap, ok := prop.(map[string]interface{}); ok {
+					if errMsg, ok := propMap["errorMessage"].(map[string]interface{}); ok {
+						fieldErrors := make(map[string]string)
+						for key, msg := range errMsg {
+							if msgStr, ok := msg.(string); ok {
+								fieldErrors[key] = msgStr
+							}
+						}
+						errorMessages[field] = fieldErrors
+					}
+				}
+			}
+		}
+
+		// Extract required field messages
+		if errMsg, ok := items["errorMessage"].(map[string]interface{}); ok {
+			if requiredMsgs, ok := errMsg["required"].(map[string]interface{}); ok {
+				for field, msg := range requiredMsgs {
+					if msgStr, ok := msg.(string); ok {
+						if _, exists := errorMessages[field]; !exists {
+							errorMessages[field] = make(map[string]string)
+						}
+						errorMessages[field]["required"] = msgStr
+					}
+				}
+			}
+		}
+	}
+
+	return errorMessages
 }
 
 // ValidateRequest validates an HTTP request against Schema
@@ -153,6 +177,64 @@ func (v *Validator) ValidateBytes(jsonData []byte) (*ValidationResult, error) {
 	return v.buildValidationResult(result), nil
 }
 
+// buildValidationResult builds the validation result with custom error messages
+func (v *Validator) buildValidationResult(result *gojsonschema.Result) *ValidationResult {
+	validationResult := &ValidationResult{
+		Valid: result.Valid(),
+	}
+
+	if !result.Valid() {
+		validationResult.Errors = make([]ValidationError, 0, len(result.Errors()))
+
+		for _, err := range result.Errors() {
+			field := strings.TrimPrefix(err.Field(), "(root).")
+			if field == "(root)" {
+				field = ""
+			}
+
+			// Try to get custom error message
+			message := v.getCustomErrorMessage(field, err)
+
+			validationErr := ValidationError{
+				Field:      field,
+				Message:    message,
+				Constraint: err.Type(),
+				Context:    err.Context().String(),
+			}
+
+			if err.Value() != nil {
+				validationErr.Value = err.Value()
+			}
+
+			validationResult.Errors = append(validationResult.Errors, validationErr)
+		}
+	}
+
+	return validationResult
+}
+
+// getCustomErrorMessage tries to find a custom error message for the validation error
+func (v *Validator) getCustomErrorMessage(field string, err gojsonschema.ResultError) string {
+	// Split field path for nested properties
+	fieldPath := strings.Split(field, ".")
+	baseField := fieldPath[0]
+
+	if fieldMessages, ok := v.customErrors[baseField]; ok {
+		// Check for specific constraint message
+		if msg, ok := fieldMessages[err.Type()]; ok {
+			return msg
+		}
+
+		// Check for generic message
+		if msg, ok := fieldMessages["_"]; ok {
+			return msg
+		}
+	}
+
+	// Fallback to default description
+	return err.Description()
+}
+
 // ValidateString validates a JSON string against the schema
 func (v *Validator) ValidateString(jsonString string) (*ValidationResult, error) {
 	return v.ValidateBytes([]byte(jsonString))
@@ -166,34 +248,6 @@ func (v *Validator) ValidateInterface(data interface{}) (*ValidationResult, erro
 	}
 
 	return v.ValidateBytes(jsonBytes)
-}
-
-// buildValidationResult builds the validation result from the gojsonschema result
-func (v *Validator) buildValidationResult(result *gojsonschema.Result) *ValidationResult {
-	validationResult := &ValidationResult{
-		Valid: result.Valid(),
-	}
-
-	if !result.Valid() {
-		validationResult.Errors = make([]ValidationError, 0, len(result.Errors()))
-
-		for _, err := range result.Errors() {
-			validationErr := ValidationError{
-				Field:      err.Field(),
-				Message:    err.Description(),
-				Constraint: err.Type(),
-			}
-
-			// Tenta extrair o valor que causou o erro
-			if err.Value() != nil {
-				validationErr.Value = err.Value()
-			}
-
-			validationResult.Errors = append(validationResult.Errors, validationErr)
-		}
-	}
-
-	return validationResult
 }
 
 // Middleware returns an HTTP middleware for automatic validation
