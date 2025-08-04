@@ -4,6 +4,7 @@
 		"StripPrefix": "/json-schema-validation",
 		"Include": [
 			"/src/github.com/raywall/json-schema-validation/*.go",
+			"/src/github.com/raywall/json-schema-validation/utils/*.go",
 			"/src/github.com/raywall/json-schema-validation/examples/*.go",
 		],
 		"Exclude": [
