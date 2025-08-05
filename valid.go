@@ -1,4 +1,3 @@
-// Package valid provides JSON Schema validation capabilities for HTTP requests and JSON data.
 package valid
 
 import (
@@ -12,34 +11,37 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 )
 
-// ValidationError represents a detailed validation error
+// ValidationError representa um erro de validação detalhado para um campo específico.
+// Eu projetei esta estrutura para fornecer feedback claro e estruturado para os clientes da API.
 type ValidationError struct {
-	Field      string      `json:"field"`
-	Message    string      `json:"message"`
-	Value      interface{} `json:"value,omitempty"`
-	Constraint string      `json:"constraint,omitempty"`
-	Context    string      `json:"context,omitempty"`
+	Field      string      `json:"field"`                // O campo que falhou na validação.
+	Message    string      `json:"message"`              // A mensagem de erro (pode ser personalizada).
+	Value      interface{} `json:"value,omitempty"`      // O valor que causou o erro.
+	Constraint string      `json:"constraint,omitempty"` // A restrição do schema que foi violada (ex: "minLength").
+	Context    string      `json:"context,omitempty"`    // O contexto do erro, fornecido pela biblioteca de validação.
 }
 
-// ValidationResult represents the result of a validation
+// ValidationResult representa o resultado completo de uma operação de validação.
 type ValidationResult struct {
-	Valid  bool              `json:"valid"`
-	Errors []ValidationError `json:"errors,omitempty"`
+	Valid  bool              `json:"valid"`            // `true` se os dados forem válidos, `false` caso contrário.
+	Errors []ValidationError `json:"errors,omitempty"` // Uma lista de erros de validação se Valid for `false`.
 }
 
-// ErrorResponse represents the standard http error response
+// ErrorResponse representa uma resposta de erro HTTP padrão que pode ser usada pelo middleware.
 type ErrorResponse struct {
-	Error   string            `json:"error"`
-	Details []ValidationError `json:"details,omitempty"`
+	Error   string            `json:"error"`             // Uma mensagem de erro geral.
+	Details []ValidationError `json:"details,omitempty"` // Os detalhes específicos dos erros de validação.
 }
 
-// Validator encapsulates the Json Schema validator
+// Validator é a estrutura principal que encapsula um schema JSON e fornece os métodos de validação.
+// Cada instância de Validator está ligada a um único schema.
 type Validator struct {
 	schema       gojsonschema.JSONLoader
-	customErrors map[string]map[string]string // Mapa de mensagens de erro personalizadas
+	customErrors map[string]map[string]string // Um mapa de mensagens de erro personalizadas extraídas do schema.
 }
 
-// New creates a new validator from a Schema file
+// New cria um novo Validator a partir de um arquivo de schema no sistema de arquivos.
+// Esta é a forma recomendada de carregar schemas que estão armazenados junto com a aplicação.
 func New(schemaPath string) (*Validator, error) {
 	schemaFile, err := os.Open(schemaPath)
 	if err != nil {
@@ -55,7 +57,8 @@ func New(schemaPath string) (*Validator, error) {
 	return NewFromBytes(schemaBytes)
 }
 
-// NewFromString creates a validator from a string JSON Schema
+// NewFromString cria um novo Validator a partir de uma string contendo o schema JSON.
+// Útil para schemas que são gerados dinamicamente ou embutidos no código.
 func NewFromString(schemaJSON string) (*Validator, error) {
 	if strings.TrimSpace(schemaJSON) == "" {
 		return nil, fmt.Errorf("schema não pode estar vazio")
@@ -63,7 +66,8 @@ func NewFromString(schemaJSON string) (*Validator, error) {
 	return NewFromBytes([]byte(schemaJSON))
 }
 
-// NewFromBytes creates a validator from bytes of a JSON Schema
+// NewFromBytes cria um novo Validator a partir de um slice de bytes do schema JSON.
+// Este é o construtor base que os outros utilizam. Ele também aciona a extração de mensagens de erro personalizadas.
 func NewFromBytes(schemaBytes []byte) (*Validator, error) {
 	if len(schemaBytes) == 0 {
 		return nil, fmt.Errorf("schema bytes não podem estar vazios")
@@ -86,7 +90,8 @@ func NewFromBytes(schemaBytes []byte) (*Validator, error) {
 	}, nil
 }
 
-// extractErrorMessages extracts custom error messages from schema
+// extractErrorMessages é uma função auxiliar que percorre o schema JSON para extrair
+// mensagens de erro personalizadas definidas na propriedade `errorMessage`.
 func extractErrorMessages(schema map[string]interface{}) map[string]map[string]string {
 	errorMessages := make(map[string]map[string]string)
 
@@ -125,7 +130,9 @@ func extractErrorMessages(schema map[string]interface{}) map[string]map[string]s
 	return errorMessages
 }
 
-// ValidateRequest validates an HTTP request against Schema
+// ValidateRequest lê o corpo de uma requisição HTTP, valida-o contra o schema e retorna o resultado.
+// Importante: eu projetei esta função para que o corpo da requisição possa ser lido novamente
+// pelo handler subsequente, o que é um requisito comum em middlewares.
 func (v *Validator) ValidateRequest(r *http.Request) (*ValidationResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("requisição não pode ser nil")
@@ -146,7 +153,8 @@ func (v *Validator) ValidateRequest(r *http.Request) (*ValidationResult, error) 
 	return v.ValidateBytes(body)
 }
 
-// ValidateBytes validates JSON bytes against schema
+// ValidateBytes valida um slice de bytes contendo dados JSON contra o schema.
+// Esta é a função de validação central da biblioteca.
 func (v *Validator) ValidateBytes(jsonData []byte) (*ValidationResult, error) {
 	if len(jsonData) == 0 {
 		return nil, fmt.Errorf("dados JSON não podem estar vazios")
@@ -177,7 +185,8 @@ func (v *Validator) ValidateBytes(jsonData []byte) (*ValidationResult, error) {
 	return v.buildValidationResult(result), nil
 }
 
-// buildValidationResult builds the validation result with custom error messages
+// buildValidationResult constrói a estrutura ValidationResult a partir do resultado bruto
+// da biblioteca gojsonschema, substituindo as mensagens de erro padrão pelas personalizadas, se disponíveis.
 func (v *Validator) buildValidationResult(result *gojsonschema.Result) *ValidationResult {
 	validationResult := &ValidationResult{
 		Valid: result.Valid(),
@@ -213,7 +222,8 @@ func (v *Validator) buildValidationResult(result *gojsonschema.Result) *Validati
 	return validationResult
 }
 
-// getCustomErrorMessage tries to find a custom error message for the validation error
+// getCustomErrorMessage tenta encontrar uma mensagem de erro personalizada para um erro de validação específico.
+// Ele procura por mensagens específicas para a restrição (ex: "required") e também por mensagens genéricas.
 func (v *Validator) getCustomErrorMessage(field string, err gojsonschema.ResultError) string {
 	// Split field path for nested properties
 	fieldPath := strings.Split(field, ".")
@@ -235,12 +245,12 @@ func (v *Validator) getCustomErrorMessage(field string, err gojsonschema.ResultE
 	return err.Description()
 }
 
-// ValidateString validates a JSON string against the schema
+// ValidateString é um método de conveniência que valida uma string JSON contra o schema.
 func (v *Validator) ValidateString(jsonString string) (*ValidationResult, error) {
 	return v.ValidateBytes([]byte(jsonString))
 }
 
-// ValidateInterface validates an interface{} against the schema
+// ValidateInterface serializa uma estrutura ou mapa Go para JSON e depois a valida contra o schema.
 func (v *Validator) ValidateInterface(data interface{}) (*ValidationResult, error) {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
@@ -250,20 +260,22 @@ func (v *Validator) ValidateInterface(data interface{}) (*ValidationResult, erro
 	return v.ValidateBytes(jsonBytes)
 }
 
-// Middleware returns an HTTP middleware for automatic validation
+// Middleware retorna um middleware HTTP com configurações padrão para validação automática.
+// Por padrão, ele pula a validação para métodos como GET e DELETE e usa um manipulador de erros JSON padrão.
 func (v *Validator) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return v.MiddlewareWithConfig(MiddlewareConfig{}, next)
 }
 
-// MiddlewareConfig settings for the middleware
+// MiddlewareConfig define as configurações para o middleware de validação.
 type MiddlewareConfig struct {
-	// SkipMethods HTTP methods that should skip validation (default: GET, DELETE, HEAD)
+	// SkipMethods especifica uma lista de métodos HTTP que devem pular a validação.
 	SkipMethods []string
-	// ErrorHandler custom function to handle validation errors
+	// ErrorHandler permite que você defina uma função personalizada para tratar os erros de validação.
 	ErrorHandler func(w http.ResponseWriter, r *http.Request, result *ValidationResult)
 }
 
-// MiddlewareWithConfig returns an HTTP middleware with custom settings
+// MiddlewareWithConfig retorna um middleware HTTP com configurações personalizadas.
+// Isso lhe dá controle total sobre quais métodos validar e como os erros são reportados ao cliente.
 func (v *Validator) MiddlewareWithConfig(config MiddlewareConfig, next http.HandlerFunc) http.HandlerFunc {
 	// Default methods that skip validation
 	if len(config.SkipMethods) == 0 {
@@ -300,7 +312,8 @@ func (v *Validator) MiddlewareWithConfig(config MiddlewareConfig, next http.Hand
 	}
 }
 
-// defaultErrorHandler is the default error handler for the middleware
+// defaultErrorHandler é o manipulador de erros padrão usado pelo middleware.
+// Ele responde com um status 400 (Bad Request) e um corpo JSON contendo os detalhes do erro.
 func (v *Validator) defaultErrorHandler(w http.ResponseWriter, r *http.Request, result *ValidationResult) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
@@ -313,24 +326,26 @@ func (v *Validator) defaultErrorHandler(w http.ResponseWriter, r *http.Request, 
 	json.NewEncoder(w).Encode(response)
 }
 
-// MultiValidator manages multiple validators
+// MultiValidator gerencia uma coleção de validadores nomeados.
+// Eu o criei para simplificar o gerenciamento de schemas em APIs complexas
+// onde cada endpoint pode ter seu próprio schema de validação.
 type MultiValidator struct {
 	validators map[string]*Validator
 }
 
-// NewMultiValidator creates a new multiple validator manager
+// NewMultiValidator cria um novo gerenciador de múltiplos validadores.
 func NewMultiValidator() *MultiValidator {
 	return &MultiValidator{
 		validators: make(map[string]*Validator),
 	}
 }
 
-// Add adds a validator with a specific key
+// Add adiciona um validador pré-construído ao gerenciador com uma chave específica.
 func (mv *MultiValidator) Add(key string, validator *Validator) {
 	mv.validators[key] = validator
 }
 
-// AddFromFile add a validator from a file
+// AddFromFile é um método de conveniência para carregar um schema de um arquivo e adicioná-lo ao gerenciador.
 func (mv *MultiValidator) AddFromFile(key, schemaPath string) error {
 	validator, err := New(schemaPath)
 	if err != nil {
@@ -340,7 +355,7 @@ func (mv *MultiValidator) AddFromFile(key, schemaPath string) error {
 	return nil
 }
 
-// AddFromString adds a validator from a string
+// AddFromString é um método de conveniência para criar um validador a partir de uma string de schema e adicioná-lo.
 func (mv *MultiValidator) AddFromString(key, schemaJSON string) error {
 	validator, err := NewFromString(schemaJSON)
 	if err != nil {
@@ -350,18 +365,18 @@ func (mv *MultiValidator) AddFromString(key, schemaJSON string) error {
 	return nil
 }
 
-// Get returns a validator by key
+// Get retorna um validador do gerenciador pela sua chave.
 func (mv *MultiValidator) Get(key string) (*Validator, bool) {
 	validator, exists := mv.validators[key]
 	return validator, exists
 }
 
-// Remove removes a validator
+// Remove remove um validador do gerenciador.
 func (mv *MultiValidator) Remove(key string) {
 	delete(mv.validators, key)
 }
 
-// Keys returns all validator keys
+// Keys retorna uma lista de todas as chaves de validadores registrados.
 func (mv *MultiValidator) Keys() []string {
 	keys := make([]string, 0, len(mv.validators))
 	for key := range mv.validators {
@@ -370,7 +385,7 @@ func (mv *MultiValidator) Keys() []string {
 	return keys
 }
 
-// Count returns the number of registered validators
+// Count retorna o número de validadores registrados no gerenciador.
 func (mv *MultiValidator) Count() int {
 	return len(mv.validators)
 }
